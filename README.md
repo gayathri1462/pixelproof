@@ -114,7 +114,58 @@ Hit "Run audit" and watch the magic happen ✨
 
 ## ☁️ Deploy
 
-### Step 1: Push to GitHub
+### Option 1: Automated (Recommended)
+
+This repo includes GitHub Actions workflows for automatic deployment to Vercel + Railway.
+
+#### Setup
+
+1. **Push to GitHub**
+
+   ```bash
+   git add .
+   git commit -m "Initial commit: pixelproof"
+   git remote add origin https://github.com/YOUR_USERNAME/pixelproof.git
+   git push -u origin main
+   ```
+
+2. **Vercel Setup**
+   - Go to [vercel.com](https://vercel.com) → **Add New** → **Project**
+   - Import your GitHub repo, set root directory to `/client`
+   - Copy the **Project ID** and **Org ID** from Vercel project settings
+   - Generate a [Vercel token](https://vercel.com/account/tokens)
+
+3. **Railway Setup**
+   - Go to [railway.app](https://railway.app) → **New Project** → **Deploy from GitHub**
+   - Select your repo, set root directory to `/server`
+   - Generate a [Railway token](https://docs.railway.app/develop/cli#installing-the-cli)
+
+4. **Add GitHub Secrets**
+   In your GitHub repo → Settings → Secrets and variables → Actions:
+
+   ```
+   VERCEL_TOKEN       = your_vercel_token
+   VERCEL_ORG_ID      = your_vercel_org_id
+   VERCEL_PROJECT_ID  = your_vercel_project_id
+   RAILWAY_TOKEN      = your_railway_token
+   ```
+
+5. **Configure Vercel Environment**
+   In Vercel project settings → Environment Variables:
+   ```
+   REACT_APP_API_URL = https://your-railway-app.railway.app
+   ```
+   (Update this after Railway deployment completes)
+
+#### How it works
+
+- Push to `main` → Client deploys to Vercel automatically
+- Push to `main` → Server deploys to Railway automatically
+- Only deploys when relevant files change (client/ or server/)
+
+### Option 2: Manual Deploy
+
+#### Step 1: Push to GitHub
 
 ```bash
 git add .
@@ -123,7 +174,7 @@ git remote add origin https://github.com/YOUR_USERNAME/pixelproof.git
 git push -u origin main
 ```
 
-### Step 2: Deploy server to Railway
+#### Step 2: Deploy server to Railway
 
 1. Go to [railway.app](https://railway.app)
 2. Click **New Project** → **Deploy from GitHub**
@@ -135,7 +186,7 @@ git push -u origin main
 
 Example: `https://pixelproof-prod.up.railway.app`
 
-### Step 3: Deploy client to Vercel
+#### Step 3: Deploy client to Vercel
 
 1. Go to [vercel.com](https://vercel.com)
 2. Click **Add New** → **Project** → **Import Git Repository**
