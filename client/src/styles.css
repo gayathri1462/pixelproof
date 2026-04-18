@@ -1,0 +1,50 @@
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg: #f8f8f7;
+  --surface: #ffffff;
+  --border: rgba(0,0,0,0.1);
+  --border-strong: rgba(0,0,0,0.2);
+  --text: #1a1a18;
+  --text-2: #6b6b67;
+  --text-3: #a0a09c;
+  --radius: 10px;
+  --radius-sm: 6px;
+  --pass: #0f6e56;
+  --pass-bg: #e1f5ee;
+  --warn: #854f0b;
+  --warn-bg: #faeeda;
+  --fail: #a32d2d;
+  --fail-bg: #fcebeb;
+  --accent: #534ab7;
+  --accent-bg: #eeedfe;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #111110;
+    --surface: #1c1c1a;
+    --border: rgba(255,255,255,0.08);
+    --border-strong: rgba(255,255,255,0.15);
+    --text: #e8e8e4;
+    --text-2: #a0a09c;
+    --text-3: #6b6b67;
+    --pass: #5dcaa5;
+    --pass-bg: #04342c;
+    --warn: #ef9f27;
+    --warn-bg: #412402;
+    --fail: #f09595;
+    --fail-bg: #501313;
+    --accent: #afa9ec;
+    --accent-bg: #26215c;
+  }
+}
+
+html, body { background: var(--bg); color: var(--text); font-family: 'Inter', system-ui, sans-serif; font-size: 15px; line-height: 1.6; }
+
+button { cursor: pointer; font-family: inherit; }
+input, select { font-family: inherit; }
+
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 3px; }
