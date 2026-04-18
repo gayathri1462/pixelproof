@@ -1,4 +1,4 @@
-# Pixelproof
+# Pixel-Perfect Auditor
 
 > Pixel-perfect design QA — compare Figma exports against your live UI and get an instant diff report.
 
@@ -17,7 +17,8 @@ Upload a Figma design export, point it at a live URL (or upload a screenshot), a
 ✅ **Mismatch %** with Pass / Warn / Fail severity  
 ✅ **Configurable threshold** — anti-aliasing noise doesn't count as failure  
 ✅ **Export report as CSV** — share with your team  
-✅ **Two input modes** — screenshot any URL OR upload a screenshot directly
+✅ **Two input modes** — screenshot any URL OR upload a screenshot directly  
+✅ **Optional design spec JSON** — compare expected CSS styles against the live page DOM in URL mode
 
 ---
 
@@ -70,7 +71,7 @@ pixelproof/
 ### 1. Clone & setup
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/pixelproof.git
+git clone https://github.com/gayathri1462/pixelproof.git
 cd pixelproof
 ```
 
@@ -92,9 +93,10 @@ npm run dev
 ```bash
 cd client
 npm install
+cp .env .env.local
 npm start
 # → App running on http://localhost:3000
-# Automatically talks to http://localhost:4000
+# Reads API URL from /client/.env.local
 ```
 
 ### 4. Open browser
@@ -108,73 +110,24 @@ Upload a Figma export (PNG) and either:
 - Enter a live URL (server screenshots it), or
 - Upload a live screenshot directly
 
+If you want CSS property diffing, use the live URL mode and paste an optional design spec JSON array into the panel.
+
 Hit "Run audit" and watch the magic happen ✨
 
 ---
 
 ## ☁️ Deploy
 
-### Option 1: Automated (Recommended)
-
-This repo includes GitHub Actions workflows for automatic deployment to Vercel + Railway.
-
-#### Setup
-
-1. **Push to GitHub**
-
-   ```bash
-   git add .
-   git commit -m "Initial commit: pixelproof"
-   git remote add origin https://github.com/YOUR_USERNAME/pixelproof.git
-   git push -u origin main
-   ```
-
-2. **Vercel Setup**
-   - Go to [vercel.com](https://vercel.com) → **Add New** → **Project**
-   - Import your GitHub repo, set root directory to `/client`
-   - Copy the **Project ID** and **Org ID** from Vercel project settings
-   - Generate a [Vercel token](https://vercel.com/account/tokens)
-
-3. **Railway Setup**
-   - Go to [railway.app](https://railway.app) → **New Project** → **Deploy from GitHub**
-   - Select your repo, set root directory to `/server`
-   - Generate a [Railway token](https://docs.railway.app/develop/cli#installing-the-cli)
-
-4. **Add GitHub Secrets**
-   In your GitHub repo → Settings → Secrets and variables → Actions:
-
-   ```
-   VERCEL_TOKEN       = your_vercel_token
-   VERCEL_ORG_ID      = your_vercel_org_id
-   VERCEL_PROJECT_ID  = your_vercel_project_id
-   RAILWAY_TOKEN      = your_railway_token
-   ```
-
-5. **Configure Vercel Environment**
-   In Vercel project settings → Environment Variables:
-   ```
-   REACT_APP_API_URL = https://your-railway-app.railway.app
-   ```
-   (Update this after Railway deployment completes)
-
-#### How it works
-
-- Push to `main` → Client deploys to Vercel automatically
-- Push to `main` → Server deploys to Railway automatically
-- Only deploys when relevant files change (client/ or server/)
-
-### Option 2: Manual Deploy
-
-#### Step 1: Push to GitHub
+### Step 1: Push to GitHub
 
 ```bash
 git add .
 git commit -m "Initial commit: pixelproof"
-git remote add origin https://github.com/YOUR_USERNAME/pixelproof.git
+git remote add origin https://github.com/gayathri1462/pixelproof.git
 git push -u origin main
 ```
 
-#### Step 2: Deploy server to Railway
+### Step 2: Deploy server to Railway
 
 1. Go to [railway.app](https://railway.app)
 2. Click **New Project** → **Deploy from GitHub**
@@ -186,7 +139,7 @@ git push -u origin main
 
 Example: `https://pixelproof-prod.up.railway.app`
 
-#### Step 3: Deploy client to Vercel
+### Step 3: Deploy client to Vercel
 
 1. Go to [vercel.com](https://vercel.com)
 2. Click **Add New** → **Project** → **Import Git Repository**
@@ -198,6 +151,8 @@ Example: `https://pixelproof-prod.up.railway.app`
    ```
    (Replace with your actual Railway URL)
 6. Deploy
+
+> Tip: If you want CSS property diffing in the client, be sure the Vercel app points at the Railway server URL and use live URL mode with the optional JSON design spec.
 
 **Done!** Both will auto-redeploy when you push to `main`.
 
@@ -236,15 +191,23 @@ POST /audit
 {
   "url": "https://your-app.com/page",
   "figmaImage": "data:image/png;base64,...",
-  "threshold": 0.1
+  "threshold": 0.1,
+  "designSpec": [
+    {
+      "element": "h1",
+      "text": "Welcome",
+      "styles": { "color": "#333", "fontSize": "24px" }
+    }
+  ]
 }
 ```
 
-| Field        | Type   | Required | Description                                                        |
-| ------------ | ------ | -------- | ------------------------------------------------------------------ |
-| `url`        | string | ✅       | Live page URL to screenshot                                        |
-| `figmaImage` | string | ✅       | Base64-encoded PNG/JPG (Figma export)                              |
-| `threshold`  | number | —        | Pixel match sensitivity: 0 (strict) to 1 (lenient). Default: `0.1` |
+| Field        | Type   | Required | Description                                                                            |
+| ------------ | ------ | -------- | -------------------------------------------------------------------------------------- |
+| `url`        | string | ✅       | Live page URL to screenshot                                                            |
+| `figmaImage` | string | ✅       | Base64-encoded PNG/JPG (Figma export)                                                  |
+| `threshold`  | number | —        | Pixel match sensitivity: 0 (strict) to 1 (lenient). Default: `0.1`                     |
+| `designSpec` | array  | —        | Optional JSON array used for CSS property comparisons against the live DOM in URL mode |
 
 **Response**
 
@@ -257,15 +220,29 @@ POST /audit
   "height": 900,
   "severity": "warn",
   "diffImage": "data:image/png;base64,...",
-  "liveImage": "data:image/png;base64,..."
+  "liveImage": "data:image/png;base64,...",
+  "cssIssues": [
+    {
+      "type": "color",
+      "element": "h1 \"Welcome\"",
+      "design": "#333333",
+      "live": "rgb(51, 51, 51)",
+      "severity": "warn"
+    }
+  ],
+  "cssIssueCount": 1,
+  "cssSeverity": "warn"
 }
 ```
 
-| Field       | Description                                     |
-| ----------- | ----------------------------------------------- |
-| `severity`  | `"pass"` (0%) · `"warn"` (<5%) · `"fail"` (≥5%) |
-| `diffImage` | PNG with red highlights on mismatched pixels    |
-| `liveImage` | PNG screenshot that was taken                   |
+| Field           | Description                                     |
+| --------------- | ----------------------------------------------- |
+| `severity`      | `"pass"` (0%) · `"warn"` (<5%) · `"fail"` (≥5%) |
+| `diffImage`     | PNG with red highlights on mismatched pixels    |
+| `liveImage`     | PNG screenshot that was taken                   |
+| `cssIssues`     | Details about expected vs live CSS properties   |
+| `cssIssueCount` | Number of CSS property differences              |
+| `cssSeverity`   | Highest severity level among CSS issues         |
 
 ---
 
@@ -275,7 +252,7 @@ POST /audit
 POST /diff-only
 ```
 
-Use when you already have both screenshots and just need the diff.
+Use when you already have both screenshots and just need the pixel diff. This endpoint does not extract CSS properties from the page DOM.
 
 **Request body**
 
@@ -287,7 +264,7 @@ Use when you already have both screenshots and just need the diff.
 }
 ```
 
-**Response** — same as `/audit`, minus `liveImage`.
+**Response** — same as `/audit`, minus `liveImage` and without CSS property issues.
 
 ---
 
@@ -409,7 +386,7 @@ npm install @sparticuz/chromium
 - [ ] **Figma API integration** — pull frames directly (no manual export)
 - [ ] **Component-level diffing** — identify which component failed
 - [ ] **Storybook integration** — audit all stories automatically on push
-- [ ] **CSS property diff** — font, spacing, color token comparison
+- [x] **CSS property diff** — font, spacing, color token comparison (available in `index-enhanced.js`)
 - [ ] **GitHub Actions** — fail PRs when diff % exceeds threshold
 - [ ] **Slack notifications** — alert team when audit fails
 - [ ] **Batch audits** — diff entire design systems at once

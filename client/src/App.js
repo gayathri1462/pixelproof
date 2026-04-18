@@ -5,6 +5,14 @@ const API = process.env.REACT_APP_API_URL || "http://localhost:4000";
 // ─── tiny helpers ─────────────────────────────────────────────────────────────
 const severity = (pct) => (pct === 0 ? "pass" : pct < 5 ? "warn" : "fail");
 const severityLabel = { pass: "Pass", warn: "Warning", fail: "Fail" };
+const isValidJson = (str) => {
+  try {
+    const parsed = JSON.parse(str);
+    return Array.isArray(parsed);
+  } catch {
+    return false;
+  }
+};
 
 const badgeStyle = (sev) => ({
   display: "inline-flex",
@@ -18,6 +26,34 @@ const badgeStyle = (sev) => ({
   color: `var(--${sev})`,
   letterSpacing: ".03em",
   textTransform: "uppercase",
+});
+
+const panelStyle = {
+  background: "var(--surface)",
+  border: "0.5px solid var(--border)",
+  borderRadius: "var(--radius)",
+  padding: "1.25rem",
+  boxShadow: "0 18px 40px rgba(0,0,0,0.05)",
+};
+
+const sectionLabelStyle = {
+  fontSize: 12,
+  fontWeight: 500,
+  color: "var(--text-2)",
+  textTransform: "uppercase",
+  letterSpacing: ".06em",
+  marginBottom: 8,
+};
+
+const primaryButton = (active = false) => ({
+  height: 34,
+  padding: "0 14px",
+  fontSize: 13,
+  borderRadius: "999px",
+  border: "0.5px solid var(--border-strong)",
+  background: active ? "var(--accent)" : "transparent",
+  color: active ? "#fff" : "var(--text-2)",
+  transition: "all .15s",
 });
 
 // ─── UploadZone ───────────────────────────────────────────────────────────────
@@ -286,6 +322,7 @@ export default function App() {
   const [url, setUrl] = useState("");
   const [figmaImage, setFigmaImage] = useState(null);
   const [liveImage, setLiveImage] = useState(null);
+  const [designSpec, setDesignSpec] = useState("");
   const [threshold, setThreshold] = useState(0.1);
   const [mode, setMode] = useState("url"); // "url" | "upload"
   const [loading, setLoading] = useState(false);
@@ -307,11 +344,14 @@ export default function App() {
     if (mode === "url" && !url) return setError("Please enter a live URL.");
     if (mode === "upload" && !liveImage)
       return setError("Please upload a live screenshot.");
+    if (designSpec && !isValidJson(designSpec))
+      return setError("Design spec must be valid JSON array format.");
 
     setLoading(true);
 
     try {
       let data;
+      const apiUrl = process.env.REACT_APP_API_URL || "http://localhost:4000";
 
       if (mode === "url") {
         tick(15, "Launching browser...");
@@ -320,32 +360,51 @@ export default function App() {
         await wait(400);
         tick(55, "Taking screenshot...");
 
-        const res = await fetch(`${API}/audit`, {
+        const body = { url, figmaImage, threshold };
+        if (designSpec) {
+          body.designSpec = JSON.parse(designSpec);
+        }
+
+        const res = await fetch(`${apiUrl}/audit`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ url, figmaImage, threshold }),
+          body: JSON.stringify(body),
         });
 
         tick(80, "Running pixel diff...");
         await wait(300);
+
+        if (!res.ok) {
+          const errData = await res.json();
+          throw new Error(errData.error || `Server error (${res.status})`);
+        }
+
         data = await res.json();
-        if (!res.ok) throw new Error(data.error || "Server error");
       } else {
         tick(30, "Uploading images...");
         await wait(400);
         tick(60, "Running pixel diff...");
 
-        const res = await fetch(`${API}/diff-only`, {
+        const apiUrl = process.env.REACT_APP_API_URL || "http://localhost:4000";
+        const requestBody = { figmaImage, liveImage, threshold };
+        if (designSpec) {
+          requestBody.designSpec = JSON.parse(designSpec);
+        }
+        const res = await fetch(`${apiUrl}/diff-only`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ figmaImage, liveImage, threshold }),
+          body: JSON.stringify(requestBody),
         });
 
         tick(85, "Generating report...");
         await wait(300);
-        data = await res.json();
-        if (!res.ok) throw new Error(data.error || "Server error");
 
+        if (!res.ok) {
+          const errData = await res.json();
+          throw new Error(errData.error || `Server error (${res.status})`);
+        }
+
+        data = await res.json();
         data.liveImage = liveImage;
       }
 
@@ -353,7 +412,17 @@ export default function App() {
       await wait(300);
       setResult(data);
     } catch (e) {
-      setError(e.message);
+      const msg = e.message;
+      if (msg.includes("Failed to fetch")) {
+        setError(
+          `❌ Cannot connect to server. Is it running? (API URL: ${process.env.REACT_APP_API_URL || "http://localhost:4000"})`,
+        );
+      } else if (msg.includes("SyntaxError")) {
+        setError("Server returned invalid response. Check server logs.");
+      } else {
+        setError(`Error: ${msg}`);
+      }
+      console.error("Full error:", e);
     } finally {
       setLoading(false);
       setProgress(0);
@@ -385,36 +454,45 @@ export default function App() {
     <div style={{ minHeight: "100vh", padding: "2rem 1rem" }}>
       <div style={{ maxWidth: 900, margin: "0 auto" }}>
         {/* Header */}
-        <div style={{ marginBottom: "2rem" }}>
+        <div style={{ marginBottom: "2.5rem" }}>
           <div
             style={{
               display: "flex",
-              alignItems: "center",
-              gap: 10,
-              marginBottom: 4,
+              alignItems: "flex-start",
+              gap: 14,
+              flexWrap: "wrap",
             }}
           >
             <div
               style={{
-                width: 28,
-                height: 28,
-                borderRadius: 7,
+                width: 42,
+                height: 42,
+                borderRadius: 13,
                 background: "var(--accent-bg)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
+                display: "grid",
+                placeItems: "center",
               }}
             >
               <AuditIcon />
             </div>
-            <h1 style={{ fontSize: 20, fontWeight: 600 }}>
-              Pixel-Perfect Auditor
-            </h1>
+            <div style={{ minWidth: 0 }}>
+              <h1 style={{ fontSize: 28, fontWeight: 700, margin: 0 }}>
+                Pixel-perfect auditor
+              </h1>
+              <p
+                style={{
+                  marginTop: 10,
+                  color: "var(--text-2)",
+                  fontSize: 15,
+                  maxWidth: 720,
+                  lineHeight: 1.7,
+                }}
+              >
+                Compare Figma designs against your live UI, inspect pixel drift,
+                and surface CSS property differences in one polished report.
+              </p>
+            </div>
           </div>
-          <p style={{ color: "var(--text-2)", fontSize: 14 }}>
-            Compare Figma designs against your live UI and get a pixel diff
-            report.
-          </p>
         </div>
 
         {/* Inputs */}
@@ -426,65 +504,128 @@ export default function App() {
             marginBottom: 16,
           }}
         >
-          <UploadZone
-            label="Figma design export"
-            value={figmaImage}
-            onChange={setFigmaImage}
-          />
+          <div style={panelStyle}>
+            <UploadZone
+              label="Figma design export"
+              value={figmaImage}
+              onChange={setFigmaImage}
+            />
+          </div>
 
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            <span
-              style={{
-                fontSize: 12,
-                fontWeight: 500,
-                color: "var(--text-2)",
-                textTransform: "uppercase",
-                letterSpacing: ".06em",
-              }}
-            >
-              Live UI
-            </span>
-            <div style={{ display: "flex", gap: 6, marginBottom: 4 }}>
-              {["url", "upload"].map((m) => (
-                <button
-                  key={m}
-                  onClick={() => setMode(m)}
+          <div style={panelStyle}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+              <div>
+                <span
                   style={{
-                    height: 30,
-                    padding: "0 12px",
-                    fontSize: 13,
-                    borderRadius: "var(--radius-sm)",
-                    border: "0.5px solid var(--border-strong)",
-                    background: mode === m ? "var(--text)" : "transparent",
-                    color: mode === m ? "var(--bg)" : "var(--text-2)",
-                    fontWeight: mode === m ? 500 : 400,
-                    transition: "all .15s",
+                    fontSize: 12,
+                    fontWeight: 500,
+                    color: "var(--text-2)",
+                    textTransform: "uppercase",
+                    letterSpacing: ".06em",
                   }}
                 >
-                  {m === "url" ? "Screenshot URL" : "Upload screenshot"}
-                </button>
-              ))}
+                  Live UI
+                </span>
+                <div
+                  style={{
+                    display: "flex",
+                    gap: 8,
+                    flexWrap: "wrap",
+                    marginBottom: 4,
+                  }}
+                >
+                  {[
+                    { key: "url", label: "Screenshot URL" },
+                    { key: "upload", label: "Upload screenshot" },
+                  ].map((item) => (
+                    <button
+                      key={item.key}
+                      onClick={() => setMode(item.key)}
+                      style={primaryButton(mode === item.key)}
+                    >
+                      {item.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {mode === "url" ? (
+                <input
+                  value={url}
+                  onChange={(e) => setUrl(e.target.value)}
+                  placeholder="https://your-app.com/page"
+                  style={{
+                    height: 44,
+                    width: "100%",
+                    padding: "0 14px",
+                    fontSize: 14,
+                    border: "0.5px solid var(--border-strong)",
+                    borderRadius: "var(--radius-sm)",
+                    background: "var(--surface)",
+                    color: "var(--text)",
+                    outline: "none",
+                  }}
+                  onKeyDown={(e) => e.key === "Enter" && runAudit()}
+                />
+              ) : (
+                <UploadZone
+                  label="Live screenshot"
+                  value={liveImage}
+                  onChange={setLiveImage}
+                />
+              )}
+
+              {mode === "url" ? (
+                <div style={{ display: "grid", gap: 10, marginTop: 16 }}>
+                  <div style={sectionLabelStyle}>Design spec (optional)</div>
+                  <textarea
+                    value={designSpec}
+                    onChange={(e) => setDesignSpec(e.target.value)}
+                    placeholder='[{"element": "h1", "text": "Welcome", "styles": {"color": "#333", "fontSize": "24px"}}]'
+                    style={{
+                      width: "100%",
+                      minHeight: 110,
+                      padding: "10px 12px",
+                      fontSize: 13,
+                      fontFamily: "monospace",
+                      border: "0.5px solid var(--border-strong)",
+                      borderRadius: "var(--radius-sm)",
+                      background: "var(--surface)",
+                      color: "var(--text)",
+                      outline: "none",
+                      resize: "vertical",
+                    }}
+                  />
+                  <div
+                    style={{
+                      fontSize: 12,
+                      color: "var(--text-3)",
+                      lineHeight: 1.5,
+                    }}
+                  >
+                    Optional JSON array used for CSS property comparisons on the
+                    live page. Works only in live URL mode.
+                  </div>
+                </div>
+              ) : (
+                <div
+                  style={{
+                    marginTop: 16,
+                    padding: 14,
+                    border: "0.5px solid var(--border-strong)",
+                    borderRadius: "var(--radius-sm)",
+                    background: "var(--surface)",
+                    color: "var(--text-2)",
+                    fontSize: 12,
+                    lineHeight: 1.6,
+                  }}
+                >
+                  Design spec is only available in screenshot URL mode. Upload
+                  mode produces a pixel diff report from two images but cannot
+                  extract live DOM styles.
+                </div>
+              )}
             </div>
-            {mode === "url" ? (
-              <input
-                value={url}
-                onChange={(e) => setUrl(e.target.value)}
-                placeholder="https://your-app.com/page"
-                style={{
-                  height: 40,
-                  padding: "0 12px",
-                  fontSize: 14,
-                  border: "0.5px solid var(--border-strong)",
-                  borderRadius: "var(--radius-sm)",
-                  background: "var(--surface)",
-                  color: "var(--text)",
-                  outline: "none",
-                }}
-                onKeyDown={(e) => e.key === "Enter" && runAudit()}
-              />
-            ) : (
-              <UploadZone label="" value={liveImage} onChange={setLiveImage} />
-            )}
           </div>
         </div>
 
@@ -600,16 +741,17 @@ export default function App() {
             onClick={runAudit}
             disabled={loading}
             style={{
-              height: 40,
-              padding: "0 24px",
+              minWidth: 140,
+              height: 44,
+              padding: "0 28px",
               fontSize: 14,
-              fontWeight: 500,
+              fontWeight: 600,
               borderRadius: "var(--radius-sm)",
               border: "none",
               background: loading ? "var(--border-strong)" : "var(--accent)",
               color: loading ? "var(--text-3)" : "#fff",
               cursor: loading ? "not-allowed" : "pointer",
-              transition: "background .15s",
+              transition: "background .15s, transform .15s",
             }}
           >
             {loading ? progressLabel || "Running..." : "Run audit"}
@@ -694,7 +836,10 @@ export default function App() {
             <div
               style={{
                 display: "grid",
-                gridTemplateColumns: "repeat(4, 1fr)",
+                gridTemplateColumns:
+                  result.cssIssueCount !== undefined
+                    ? "repeat(5, 1fr)"
+                    : "repeat(4, 1fr)",
                 gap: 10,
                 marginBottom: 20,
               }}
@@ -714,6 +859,13 @@ export default function App() {
                 value={`${result.width}×${result.height}`}
               />
               <StatCard label="Threshold" value={threshold.toFixed(2)} />
+              {result.cssIssueCount !== undefined && (
+                <StatCard
+                  label="CSS issues"
+                  value={result.cssIssueCount.toLocaleString()}
+                  sev={result.cssSeverity}
+                />
+              )}
             </div>
 
             {/* Insight text */}
@@ -729,7 +881,9 @@ export default function App() {
               }}
             >
               {result.severity === "pass" &&
-                "Perfect match — no pixel differences detected."}
+                (result.cssIssueCount === 0 || !result.cssIssues
+                  ? "Perfect match — no pixel differences detected."
+                  : `Pixels match perfectly, but ${result.cssIssueCount} CSS property difference${result.cssIssueCount !== 1 ? "s" : ""} found. Check the table below.`)}
               {result.severity === "warn" &&
                 `Minor differences detected (${result.mismatchPercent}%). Review the diff map — may be font rendering or anti-aliasing.`}
               {result.severity === "fail" &&
@@ -743,6 +897,138 @@ export default function App() {
                 liveImage={result.liveImage}
                 diffImage={result.diffImage}
               />
+            )}
+
+            {/* CSS Property Issues */}
+            {result.cssIssues && result.cssIssues.length > 0 && (
+              <div style={{ marginTop: 24 }}>
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 10,
+                    marginBottom: 16,
+                  }}
+                >
+                  <span style={{ fontSize: 14, fontWeight: 500 }}>
+                    CSS Property Differences
+                  </span>
+                  <span style={badgeStyle(result.cssSeverity || "warn")}>
+                    {result.cssIssueCount} issue
+                    {result.cssIssueCount !== 1 ? "s" : ""}
+                  </span>
+                </div>
+
+                <div
+                  style={{
+                    background: "var(--bg)",
+                    border: "0.5px solid var(--border)",
+                    borderRadius: "var(--radius-sm)",
+                    overflow: "hidden",
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "1fr 2fr 1fr 1fr 80px",
+                      gap: 0,
+                      fontSize: 12,
+                      fontWeight: 500,
+                      color: "var(--text-2)",
+                      textTransform: "uppercase",
+                      letterSpacing: ".06em",
+                      borderBottom: "0.5px solid var(--border)",
+                    }}
+                  >
+                    <div style={{ padding: "12px 16px" }}>Property</div>
+                    <div style={{ padding: "12px 16px" }}>Element</div>
+                    <div style={{ padding: "12px 16px" }}>Design</div>
+                    <div style={{ padding: "12px 16px" }}>Live</div>
+                    <div style={{ padding: "12px 16px", textAlign: "center" }}>
+                      Status
+                    </div>
+                  </div>
+
+                  {result.cssIssues.map((issue, i) => (
+                    <div
+                      key={i}
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: "1fr 2fr 1fr 1fr 80px",
+                        gap: 0,
+                        background:
+                          i % 2 === 0
+                            ? "rgba(255,255,255,0.05)"
+                            : "transparent",
+                        borderBottom:
+                          i < result.cssIssues.length - 1
+                            ? "0.5px solid var(--border)"
+                            : "none",
+                      }}
+                    >
+                      <div
+                        style={{
+                          padding: "12px 16px",
+                          fontSize: 13,
+                          fontWeight: 500,
+                          color: "var(--text)",
+                        }}
+                      >
+                        {issue.type.replace(/_/g, "-")}
+                      </div>
+                      <div
+                        style={{
+                          padding: "12px 16px",
+                          fontSize: 13,
+                          color: "var(--text-2)",
+                          fontFamily: "monospace",
+                        }}
+                      >
+                        {issue.element}
+                      </div>
+                      <div
+                        style={{
+                          padding: "12px 16px",
+                          fontSize: 13,
+                          color: "var(--text)",
+                          fontFamily: "monospace",
+                        }}
+                      >
+                        {issue.design}
+                      </div>
+                      <div
+                        style={{
+                          padding: "12px 16px",
+                          fontSize: 13,
+                          color: "var(--text)",
+                          fontFamily: "monospace",
+                        }}
+                      >
+                        {issue.live}
+                        {issue.delta && (
+                          <span
+                            style={{
+                              color: "var(--text-3)",
+                              fontSize: 11,
+                              marginLeft: 8,
+                            }}
+                          >
+                            Δ{issue.delta > 0 ? "+" : ""}
+                            {issue.delta}
+                          </span>
+                        )}
+                      </div>
+                      <div
+                        style={{ padding: "12px 16px", textAlign: "center" }}
+                      >
+                        <span style={badgeStyle(issue.severity)}>
+                          {issue.severity === "fail" ? "Fail" : "Warn"}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
             )}
           </div>
         )}
